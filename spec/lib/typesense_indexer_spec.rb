@@ -58,18 +58,21 @@ RSpec.describe TypesenseIndexer do
 end
 
 RSpec.describe Jobs::TypesenseRebuild do
-  before { SiteSetting.typesense_indexer_enabled = true }
+  before do
+    SiteSetting.typesense_indexer_enabled = true
+    allow(TypesenseIndexer).to receive(:rebuild!)
+  end
 
   it "skips a requested rebuild when a later one already started" do
     Discourse.redis.set(TypesenseIndexer::REBUILD_STARTED_KEY, 200)
-    expect(TypesenseIndexer).not_to receive(:rebuild!)
     described_class.new.execute(requested_at: 100)
+    expect(TypesenseIndexer).not_to have_received(:rebuild!)
   end
 
   it "rebuilds when requested after the last start, and on schedule" do
     Discourse.redis.set(TypesenseIndexer::REBUILD_STARTED_KEY, 100)
-    expect(TypesenseIndexer).to receive(:rebuild!).twice
     described_class.new.execute(requested_at: 200)
     described_class.new.execute({})
+    expect(TypesenseIndexer).to have_received(:rebuild!).twice
   end
 end
