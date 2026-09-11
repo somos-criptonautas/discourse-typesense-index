@@ -1,0 +1,16 @@
+plugins:
+  typesense_indexer_enabled:
+    default: false
+  typesense_url:
+    default: "http://localhost:8108"
+  typesense_api_key:
+    default: ""
+    secret: true
+  typesense_collection:
+    default: "discourse_posts"
+  typesense_excluded_categories:
+    type: category_list
+    default: ""
+  typesense_min_reply_length:
+    default: 20
+    min: 0

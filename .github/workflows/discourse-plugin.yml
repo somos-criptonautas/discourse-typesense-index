@@ -1,0 +1,32 @@
+name: Discourse Plugin
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  # lint + plugin specs inside a real Discourse checkout
+  ci:
+    uses: discourse/.github/.github/workflows/discourse-plugin.yml@v1
+
+  # the HTTP client against a real Typesense
+  typesense-client:
+    runs-on: ubuntu-latest
+    services:
+      typesense:
+        image: typesense/typesense:29.0
+        env:
+          TYPESENSE_API_KEY: xyz
+          TYPESENSE_DATA_DIR: /tmp
+        ports:
+          - 8108:8108
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - name: Wait for Typesense
+        run: timeout 60 bash -c 'until curl -sf localhost:8108/health; do sleep 1; done'
+      - run: ruby lib/typesense_indexer/client.rb

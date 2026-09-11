@@ -1,0 +1,8 @@
+en:
+  site_settings:
+    typesense_indexer_enabled: "Keep a Typesense collection in sync with the posts anonymous visitors can read."
+    typesense_url: "Typesense base URL as seen from the Discourse server, e.g. http://typesense:8108"
+    typesense_api_key: "Typesense admin API key (write access). Never use this key in a frontend."
+    typesense_collection: "Alias your frontend searches. The plugin rebuilds into a fresh collection and swaps the alias."
+    typesense_excluded_categories: "Public categories to keep out of Typesense. Subcategories of an excluded category are excluded too."
+    typesense_min_reply_length: "Replies shorter than this many characters are not indexed. First posts are always indexed."
