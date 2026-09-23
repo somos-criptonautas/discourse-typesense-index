@@ -62,6 +62,7 @@ module TypesenseIndexer
         Net::HTTP.start(
           @uri.host,
           @uri.port,
+          nil, # no proxy: Net::HTTP would otherwise route via http_proxy from the environment
           use_ssl: @uri.scheme == "https",
           open_timeout: 5,
           read_timeout: 120,
