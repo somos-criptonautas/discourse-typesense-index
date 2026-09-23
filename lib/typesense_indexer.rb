@@ -19,7 +19,8 @@ module ::TypesenseIndexer
   ].freeze
 
   def self.client
-    Client.new(SiteSetting.typesense_url, SiteSetting.typesense_api_key)
+    # a pasted key or URL often carries a trailing space or newline; Typesense answers 401
+    Client.new(SiteSetting.typesense_url.strip, SiteSetting.typesense_api_key.strip)
   end
 
   def self.collection
