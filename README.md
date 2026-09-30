@@ -1,5 +1,7 @@
 # discourse-typesense-index
 
+**ENGLISH** | [ESPAÑOL](README.es.md)
+
 Keeps a self-hosted Typesense collection in sync with the Discourse posts an anonymous
 visitor can read. No search UI, no proxy, no gems. You search from your own frontend.
 
@@ -84,3 +86,9 @@ To show only topics, filter `post_number:=1` instead.
 
 Locally: `ruby lib/typesense_indexer/client.rb`, and
 `LOAD_PLUGINS=1 bin/rspec plugins/discourse-typesense-index/spec` from a Discourse checkout.
+
+## License
+
+GPL-3.0. See [LICENSE](LICENSE).
+
+Text of this README under [CC BY-NC-SA 4.0](CC-BY-NC-SA-4.0.txt).
