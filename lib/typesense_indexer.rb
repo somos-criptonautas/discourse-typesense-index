@@ -24,31 +24,71 @@ module ::TypesenseIndexer
   ].freeze
 
   # Semantic search. Typesense embeds title and text itself at import time, and each query
-  # at search time, through an OpenAI-compatible API - DeepInfra by default. Nothing is
-  # sent from here: the field's `embed` block is the whole integration. A collection's
-  # fields are fixed when it is created, so this only takes effect on a rebuild - which
-  # changing any typesense_ setting already triggers (plugin.rb).
+  # at search time - nothing is sent from here, the field's `embed` block is the whole
+  # integration. A collection's fields are fixed when it is created, so this only takes
+  # effect on a rebuild, which changing any typesense_ setting already triggers (plugin.rb).
   def self.fields
-    model = SiteSetting.typesense_embedding_model.strip
-    return FIELDS if model.empty?
+    config = embedding_model_config
+    return FIELDS if config.nil?
 
-    FIELDS + [
-      {
-        name: "embedding",
-        type: "float[]",
-        optional: true,
-        embed: {
-          from: %w[title text],
-          model_config: {
-            # Typesense routes any openai/ model to model_config.url + path
-            model_name: "openai/#{model}",
-            api_key: SiteSetting.typesense_embedding_api_key.strip,
-            url: SiteSetting.typesense_embedding_url.strip,
-            path: SiteSetting.typesense_embedding_path.strip,
-          },
-        },
+    field = {
+      name: "embedding",
+      type: "float[]",
+      optional: true,
+      embed: {
+        from: %w[title text],
+        model_config: config,
       },
-    ]
+    }
+    # Discourse asks the provider for a shortened vector when the definition says so;
+    # num_dim makes Typesense send the same `dimensions` parameter.
+    field[:num_dim] = @embedding_definition.dimensions if @embedding_definition.matryoshka_dimensions
+    FIELDS + [field]
+  end
+
+  # The embedding definition picked in typesense_embedding_definition is one of Discourse
+  # AI's own, so the URL, model and credential - including an AiSecret - stay in one place.
+  # Typesense keeps a copy of the key in the collection schema to embed queries; a rotated
+  # key reaches it on the next rebuild (daily, or resave the setting to force one).
+  def self.embedding_model_config
+    @embedding_definition = nil
+    id = SiteSetting.typesense_embedding_definition.to_s.strip
+    return if id.empty? || !defined?(::EmbeddingDefinition)
+
+    defn = ::EmbeddingDefinition.find_by(id: id)
+    return if defn.nil?
+
+    model = defn.lookup_custom_param("model_name").to_s.strip
+    # Typesense only reaches remote models through OpenAI's API shape.
+    if defn.provider != ::EmbeddingDefinition::OPEN_AI || model.empty?
+      Rails.logger.warn(
+        "[typesense] embedding definition #{defn.id} (#{defn.provider}) is not an " \
+          "OpenAI-compatible model; indexing without embeddings",
+      )
+      return
+    end
+
+    # Discourse stores the full endpoint; Typesense wants it as base URL + path.
+    uri = URI.parse(defn.endpoint_url)
+    base = "#{uri.scheme}://#{uri.host}"
+    base += ":#{uri.port}" if uri.port != uri.default_port
+    path = uri.path.delete_prefix("/")
+    path += "?#{uri.query}" if uri.query.present?
+
+    config = {
+      # Typesense strips only the first segment, so "openai/BAAI/bge-m3" reaches the
+      # provider as "BAAI/bge-m3".
+      model_name: "openai/#{model}",
+      api_key: defn.api_key.to_s,
+      url: base,
+      path: path,
+    }
+    # Same prompts Discourse puts in front, joined with a space as Discourse does.
+    config[:query_prefix] = "#{defn.search_prompt} " if defn.search_prompt.present?
+    config[:indexing_prefix] = "#{defn.embed_prompt} " if defn.embed_prompt.present?
+
+    @embedding_definition = defn
+    config
   end
 
   def self.client
