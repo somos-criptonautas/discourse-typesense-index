@@ -15,14 +15,25 @@ module TypesenseIndexer
       @api_key = api_key
     end
 
+    # Under nginx's default client_max_body_size (1 MB): a 1000-post batch of long posts
+    # was over it and the proxy answered 413. shortcut: a single post over this size still
+    # gets a 413; raise the proxy limit if that ever happens.
+    MAX_BODY_BYTES = 900_000
+
     def import(collection, docs)
-      return if docs.empty?
-      body = docs.map { |d| JSON.generate(d) }.join("\n")
-      res =
-        request(Net::HTTP::Post, "/collections/#{collection}/documents/import?action=upsert", body)
-      # Typesense answers 200 even when single documents fail
-      failed = res.body.lines.map { |l| JSON.parse(l) }.reject { |r| r["success"] }
-      raise Error, "import into #{collection} failed: #{failed.first(3)}" if failed.any?
+      chunk = []
+      size = 0
+      docs.each do |doc|
+        line = JSON.generate(doc)
+        if chunk.any? && size + line.bytesize + 1 > MAX_BODY_BYTES
+          import_lines(collection, chunk)
+          chunk = []
+          size = 0
+        end
+        chunk << line
+        size += line.bytesize + 1
+      end
+      import_lines(collection, chunk) if chunk.any?
     end
 
     def delete(collection, id)
@@ -51,6 +62,18 @@ module TypesenseIndexer
     end
 
     private
+
+    def import_lines(collection, lines)
+      res =
+        request(
+          Net::HTTP::Post,
+          "/collections/#{collection}/documents/import?action=upsert",
+          lines.join("\n"),
+        )
+      # Typesense answers 200 even when single documents fail
+      failed = res.body.lines.map { |l| JSON.parse(l) }.reject { |r| r["success"] }
+      raise Error, "import into #{collection} failed: #{failed.first(3)}" if failed.any?
+    end
 
     def request(klass, path, body = nil, allow_404: false)
       req = klass.new("#{@uri.path.chomp("/")}#{path}") # keeps a proxy prefix like /typesense
