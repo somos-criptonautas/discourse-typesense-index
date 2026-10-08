@@ -42,7 +42,8 @@ module ::TypesenseIndexer
     }
     # Discourse asks the provider for a shortened vector when the definition says so;
     # num_dim makes Typesense send the same `dimensions` parameter.
-    field[:num_dim] = @embedding_definition.dimensions if @embedding_definition.matryoshka_dimensions
+    defn = @embedding_definition
+    field[:num_dim] = defn.dimensions if defn.matryoshka_dimensions
     FIELDS + [field]
   end
 
