@@ -14,3 +14,12 @@ plugins:
   typesense_min_reply_length:
     default: 20
     min: 0
+  typesense_embedding_api_key:
+    default: ""
+    secret: true
+  typesense_embedding_url:
+    default: "https://api.deepinfra.com"
+  typesense_embedding_path:
+    default: "v1/openai/embeddings"
+  typesense_embedding_model:
+    default: ""

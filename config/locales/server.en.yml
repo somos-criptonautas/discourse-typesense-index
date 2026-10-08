@@ -6,3 +6,7 @@ en:
     typesense_collection: "Alias your frontend searches. The plugin rebuilds into a fresh collection and swaps the alias."
     typesense_excluded_categories: "Public categories to keep out of Typesense. Subcategories of an excluded category are excluded too."
     typesense_min_reply_length: "Replies shorter than this many characters are not indexed. First posts are always indexed."
+    typesense_embedding_api_key: "API key for the embedding provider. Stored in the Typesense collection schema, which only the admin key can read. Set this before the model."
+    typesense_embedding_url: "Base URL of an OpenAI-compatible embeddings API. Typesense calls this URL plus the path below."
+    typesense_embedding_path: "Path appended to the URL. DeepInfra serves OpenAI-compatible embeddings at v1/openai/embeddings."
+    typesense_embedding_model: "Embedding model, as the provider names it (e.g. BAAI/bge-m3). Empty turns semantic search off. Changing any of these settings rebuilds the collection."

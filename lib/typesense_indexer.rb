@@ -15,8 +15,41 @@ module ::TypesenseIndexer
     { name: "category", type: "string", facet: true },
     { name: "tags", type: "string[]", facet: true },
     { name: "like_count", type: "int32" },
+    # ponytail: denormalised, so a reply only refreshes its own doc and sibling docs keep
+    # the old count until the topic is re-synced or the daily rebuild runs. It is a hint
+    # next to a search result, not a counter - re-importing every post of a hot topic on
+    # each reply would cost far more than the staleness.
+    { name: "reply_count", type: "int32" },
     { name: "created_at", type: "int64" },
   ].freeze
+
+  # Semantic search. Typesense embeds title and text itself at import time, and each query
+  # at search time, through an OpenAI-compatible API - DeepInfra by default. Nothing is
+  # sent from here: the field's `embed` block is the whole integration. A collection's
+  # fields are fixed when it is created, so this only takes effect on a rebuild - which
+  # changing any typesense_ setting already triggers (plugin.rb).
+  def self.fields
+    model = SiteSetting.typesense_embedding_model.strip
+    return FIELDS if model.empty?
+
+    FIELDS + [
+      {
+        name: "embedding",
+        type: "float[]",
+        optional: true,
+        embed: {
+          from: %w[title text],
+          model_config: {
+            # Typesense routes any openai/ model to model_config.url + path
+            model_name: "openai/#{model}",
+            api_key: SiteSetting.typesense_embedding_api_key.strip,
+            url: SiteSetting.typesense_embedding_url.strip,
+            path: SiteSetting.typesense_embedding_path.strip,
+          },
+        },
+      },
+    ]
+  end
 
   def self.client
     # a pasted key or URL often carries a trailing space or newline; Typesense answers 401
@@ -61,6 +94,7 @@ module ::TypesenseIndexer
       category: topic.category&.name.to_s,
       tags: topic.tags.map(&:name) - hidden_tags,
       like_count: post.like_count,
+      reply_count: [topic.posts_count - 1, 0].max,
       created_at: post.created_at.to_i,
     }
   end
@@ -103,7 +137,7 @@ module ::TypesenseIndexer
     Discourse.redis.set(REBUILD_STARTED_KEY, started_at.to_i)
     fresh = "#{collection}_#{started_at.to_i}"
 
-    c.create_collection(name: fresh, fields: FIELDS, default_sorting_field: "created_at")
+    c.create_collection(name: fresh, fields: fields, default_sorting_field: "created_at")
     begin
       scope =
         Post.joins(:topic).where(
