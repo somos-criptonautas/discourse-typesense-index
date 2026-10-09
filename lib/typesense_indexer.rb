@@ -84,9 +84,10 @@ module ::TypesenseIndexer
       url: base,
       path: path,
     }
-    # Same prompts Discourse puts in front, joined with a space as Discourse does.
-    config[:query_prefix] = "#{defn.search_prompt} " if defn.search_prompt.present?
-    config[:indexing_prefix] = "#{defn.embed_prompt} " if defn.embed_prompt.present?
+    # Same prompts Discourse puts in front. Typesense adds the joining space itself
+    # (EmbedderManager::get_query_prefix), so adding one here doubled it.
+    config[:query_prefix] = defn.search_prompt if defn.search_prompt.present?
+    config[:indexing_prefix] = defn.embed_prompt if defn.embed_prompt.present?
 
     @embedding_definition = defn
     config
