@@ -16,7 +16,7 @@ module TypesenseIndexer
     end
 
     # Under nginx's default client_max_body_size (1 MB): a 1000-post batch of long posts
-    # was over it and the proxy answered 413. shortcut: a single post over this size still
+    # was over it and the proxy answered 413. A single post over this size still
     # gets a 413; raise the proxy limit if that ever happens.
     MAX_BODY_BYTES = 900_000
 

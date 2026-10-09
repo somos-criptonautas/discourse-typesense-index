@@ -15,7 +15,7 @@ module ::TypesenseIndexer
     { name: "category", type: "string", facet: true },
     { name: "tags", type: "string[]", facet: true },
     { name: "like_count", type: "int32" },
-    # ponytail: denormalised, so a reply only refreshes its own doc and sibling docs keep
+    # Denormalised, so a reply only refreshes its own doc and sibling docs keep
     # the old count until the topic is re-synced or the daily rebuild runs. It is a hint
     # next to a search result, not a counter - re-importing every post of a hot topic on
     # each reply would cost far more than the staleness.
@@ -175,7 +175,7 @@ module ::TypesenseIndexer
     end
   end
 
-  # ponytail: delete-then-import leaves the topic out of results for a moment; fine for search.
+  # Delete-then-import leaves the topic out of results for a moment; fine for search.
   def self.sync_topic(topic_id)
     c = client
     c.delete_where(collection, "topic_id:=#{topic_id.to_i}")
@@ -218,7 +218,7 @@ module ::TypesenseIndexer
     c.point_alias(collection, fresh)
 
     # the previous collection, plus any left behind by a rebuild that was killed mid-way
-    # ponytail: a manual rake rebuild running at the same moment would lose its collection; rerun it.
+    # A manual rake rebuild running at the same moment would lose its collection; rerun it.
     stale = /\A#{Regexp.escape(collection)}_\d+\z/
     c.collections.each { |name| c.drop_collection(name) if name != fresh && name.match?(stale) }
 
