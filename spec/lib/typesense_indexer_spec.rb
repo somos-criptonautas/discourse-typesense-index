@@ -11,6 +11,16 @@ RSpec.describe TypesenseIndexer do
     expect(described_class.document(post)).to include(id: post.id.to_s, topic_id: post.topic_id)
   end
 
+  it "sends the topic image as an absolute URL and the category's colour and icon" do
+    category = Fabricate(:category, color: "f5c211", style_type: "icon", icon: "bitcoin")
+    upload = Fabricate(:image_upload)
+    post.topic.update!(category: category, image_upload: upload)
+    doc = described_class.document(post.reload)
+    expect(doc[:image]).to start_with("http").and end_with(upload.url.split("/").last)
+    expect(doc).to include(category_color: "f5c211", category_icon: "bitcoin")
+    expect(described_class.document(Fabricate(:post))[:image]).to eq("")
+  end
+
   it "skips read-restricted categories" do
     category = Fabricate(:private_category, group: Fabricate(:group))
     post.topic.update!(category: category)

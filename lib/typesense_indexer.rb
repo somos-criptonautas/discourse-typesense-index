@@ -21,6 +21,11 @@ module ::TypesenseIndexer
     # each reply would cost far more than the staleness.
     { name: "reply_count", type: "int32" },
     { name: "created_at", type: "int64" },
+    # Shown next to a search result, never searched: the topic's thumbnail, and the
+    # category's colour and icon for topics without one.
+    { name: "image", type: "string", index: false, optional: true },
+    { name: "category_color", type: "string", index: false, optional: true },
+    { name: "category_icon", type: "string", index: false, optional: true },
   ].freeze
 
   # Semantic search. Typesense embeds title and text itself at import time, and each query
@@ -138,6 +143,10 @@ module ::TypesenseIndexer
       like_count: post.like_count,
       reply_count: [topic.posts_count - 1, 0].max,
       created_at: post.created_at.to_i,
+      # relative when the site has no CDN, and the search UI lives on another host
+      image: topic.image_url&.then { |url| UrlHelper.absolute(url) }.to_s,
+      category_color: topic.category&.color.to_s,
+      category_icon: topic.category&.icon.to_s,
     }
   end
 
@@ -218,7 +227,10 @@ module ::TypesenseIndexer
   end
 
   def self.posts_scope(scope)
-    scope.includes(:user, topic: %i[category tags])
+    scope.includes(
+      :user,
+      topic: [:category, :tags, :image_upload, { topic_thumbnails: :optimized_image }],
+    )
   end
 end
 
