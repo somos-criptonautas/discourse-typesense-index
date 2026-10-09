@@ -143,11 +143,19 @@ module ::TypesenseIndexer
       like_count: post.like_count,
       reply_count: [topic.posts_count - 1, 0].max,
       created_at: post.created_at.to_i,
-      # relative when the site has no CDN, and the search UI lives on another host
-      image: topic.image_url&.then { |url| UrlHelper.absolute(url) }.to_s,
+      image: image_url(topic),
       category_color: topic.category&.color.to_s,
       category_icon: topic.category&.icon.to_s,
     }
+  end
+
+  # "/uploads/..." or "//cdn/..." from core, and the search UI lives on another host. A URL
+  # that will not parse costs the thumbnail, not the post's place in the index.
+  def self.image_url(topic)
+    url = topic.image_url
+    url ? URI.join(Discourse.base_url, url).to_s : ""
+  rescue URI::Error
+    ""
   end
 
   def self.import(target, posts, c = client)
