@@ -22,8 +22,9 @@ module ::TypesenseIndexer
     { name: "reply_count", type: "int32" },
     { name: "created_at", type: "int64" },
     # Shown next to a search result, never searched: the topic's thumbnail, and the
-    # category's colour and icon for topics without one.
+    # category's logo, colour and icon for topics without one.
     { name: "image", type: "string", index: false, optional: true },
+    { name: "category_image", type: "string", index: false, optional: true },
     { name: "category_color", type: "string", index: false, optional: true },
     { name: "category_icon", type: "string", index: false, optional: true },
   ].freeze
@@ -143,7 +144,8 @@ module ::TypesenseIndexer
       like_count: post.like_count,
       reply_count: [topic.posts_count - 1, 0].max,
       created_at: post.created_at.to_i,
-      image: image_url(topic),
+      image: absolute_url(topic.image_url),
+      category_image: absolute_url(topic.category&.uploaded_logo&.url),
       category_color: topic.category&.color.to_s,
       category_icon: topic.category&.icon.to_s,
     }
@@ -151,9 +153,8 @@ module ::TypesenseIndexer
 
   # "/uploads/..." or "//cdn/..." from core, and the search UI lives on another host. A URL
   # that will not parse costs the thumbnail, not the post's place in the index.
-  def self.image_url(topic)
-    url = topic.image_url
-    url ? URI.join(Discourse.base_url, url).to_s : ""
+  def self.absolute_url(url)
+    url.present? ? URI.join(Discourse.base_url, url).to_s : ""
   rescue URI::Error
     ""
   end
@@ -237,7 +238,12 @@ module ::TypesenseIndexer
   def self.posts_scope(scope)
     scope.includes(
       :user,
-      topic: [:category, :tags, :image_upload, { topic_thumbnails: :optimized_image }],
+      topic: [
+        { category: :uploaded_logo },
+        :tags,
+        :image_upload,
+        { topic_thumbnails: :optimized_image },
+      ],
     )
   end
 end

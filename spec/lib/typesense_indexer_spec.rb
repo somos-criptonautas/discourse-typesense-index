@@ -17,7 +17,9 @@ RSpec.describe TypesenseIndexer do
     post.topic.update!(category: category, image_upload: upload)
     doc = described_class.document(post.reload)
     expect(doc[:image]).to start_with("http").and end_with(upload.url.split("/").last)
-    expect(doc).to include(category_color: "f5c211", category_icon: "bitcoin")
+    expect(doc).to include(category_color: "f5c211", category_icon: "bitcoin", category_image: "")
+    category.update!(uploaded_logo: Fabricate(:image_upload))
+    expect(described_class.document(post.reload)[:category_image]).to start_with("http")
     expect(described_class.document(Fabricate(:post))[:image]).to eq("")
   end
 
