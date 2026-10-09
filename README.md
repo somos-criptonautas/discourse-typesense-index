@@ -2,6 +2,8 @@
 
 **ENGLISH** | [ESPAÑOL](README.es.md)
 
+Maintained by Criptonautas. Not affiliated with or endorsed by Discourse (Civilized Discourse Construction Kit, Inc.).
+
 Keeps a self-hosted Typesense collection in sync with the Discourse posts an anonymous
 visitor can read. No search UI, no proxy, no gems. You search from your own frontend.
 
