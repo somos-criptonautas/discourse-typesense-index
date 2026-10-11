@@ -14,6 +14,8 @@ module ::TypesenseIndexer
     { name: "category_id", type: "int64", facet: true },
     { name: "category", type: "string", facet: true },
     { name: "tags", type: "string[]", facet: true },
+    # The post's language as Discourse detected it ("es", "en"), so each site searches its own.
+    { name: "locale", type: "string", facet: true },
     { name: "like_count", type: "int32" },
     # Denormalised, so a reply only refreshes its own doc and sibling docs keep
     # the old count until the topic is re-synced or the daily rebuild runs. It is a hint
@@ -141,6 +143,7 @@ module ::TypesenseIndexer
       category_id: topic.category_id.to_i,
       category: topic.category&.name.to_s,
       tags: topic.tags.map(&:name) - hidden_tags,
+      locale: locale(post),
       like_count: post.like_count,
       reply_count: [topic.posts_count - 1, 0].max,
       created_at: post.created_at.to_i,
@@ -149,6 +152,11 @@ module ::TypesenseIndexer
       category_color: topic.category&.color.to_s,
       category_icon: topic.category&.icon.to_s,
     }
+  end
+
+  # Undetected posts (too short to tell) take the site's language; "pt_BR" is filed as "pt".
+  def self.locale(post)
+    (post.locale.presence || SiteSetting.default_locale).to_s.split(/[-_]/).first
   end
 
   # "/uploads/..." or "//cdn/..." from core, and the search UI lives on another host. A URL

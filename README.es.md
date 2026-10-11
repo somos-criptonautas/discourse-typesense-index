@@ -54,7 +54,8 @@ da la respuesta que mejor coincide de cada discusión, con un enlace directo a e
 }
 ```
 
-Para mostrar solo temas, filtra por `post_number:=1`.
+Para mostrar solo temas, filtra por `post_number:=1`. Para buscar en un solo idioma,
+filtra por `locale:=en` (el idioma del post según lo detectó Discourse, si no el del sitio).
 
 ## Cómo se mantiene sincronizado
 

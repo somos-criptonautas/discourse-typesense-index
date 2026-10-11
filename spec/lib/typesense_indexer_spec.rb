@@ -23,6 +23,13 @@ RSpec.describe TypesenseIndexer do
     expect(described_class.document(Fabricate(:post))[:image]).to eq("")
   end
 
+  it "files a post under its detected language, else the site's" do
+    SiteSetting.default_locale = "es"
+    expect(described_class.document(post)[:locale]).to eq("es")
+    post.update_columns(locale: "pt_BR")
+    expect(described_class.document(post.reload)[:locale]).to eq("pt")
+  end
+
   it "skips read-restricted categories" do
     category = Fabricate(:private_category, group: Fabricate(:group))
     post.topic.update!(category: category)

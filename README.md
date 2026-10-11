@@ -54,7 +54,8 @@ gives each discussion's best-matching reply, with a link straight to it:
 }
 ```
 
-To show only topics, filter `post_number:=1` instead.
+To show only topics, filter `post_number:=1` instead. To search one language, filter
+`locale:=en` (the post's language as Discourse detected it, else the site's).
 
 ## How it stays in sync
 
