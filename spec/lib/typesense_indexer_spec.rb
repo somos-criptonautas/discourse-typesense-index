@@ -95,3 +95,37 @@ RSpec.describe Jobs::TypesenseRebuild do
     expect(TypesenseIndexer).to have_received(:rebuild!).twice
   end
 end
+
+# A category save used to rebuild the whole index, which re-embeds every post on the forum.
+RSpec.describe "TypesenseIndexer.sync_category" do
+  before { SiteSetting.typesense_indexer_enabled = true }
+
+  let(:client) { instance_double(TypesenseIndexer::Client, delete_where: nil, import: nil) }
+
+  before { allow(TypesenseIndexer).to receive(:client).and_return(client) }
+
+  it "re-checks the category and its subcategories, and nothing else" do
+    parent = Fabricate(:category)
+    child = Fabricate(:category, parent_category_id: parent.id)
+    elsewhere = Fabricate(:category)
+
+    here = Fabricate(:post)
+    here.topic.update!(category: parent)
+    nested = Fabricate(:post)
+    nested.topic.update!(category: child)
+    other = Fabricate(:post)
+    other.topic.update!(category: elsewhere)
+
+    TypesenseIndexer.sync_category(parent.id)
+
+    expect(client).to have_received(:delete_where).with(
+      TypesenseIndexer.collection,
+      "category_id:[#{parent.id},#{child.id}]",
+    )
+    expect(client).to have_received(:import) do |_collection, docs|
+      ids = docs.map { |d| d[:id] }
+      expect(ids).to include(here.id.to_s, nested.id.to_s)
+      expect(ids).not_to include(other.id.to_s)
+    end
+  end
+end

@@ -184,6 +184,20 @@ module ::TypesenseIndexer
   end
 
   # Delete-then-import leaves the topic out of results for a moment; fine for search.
+  # A category's permissions - and the lockdown plugin's, which hang off them - decide what
+  # an anonymous visitor may read, so a save has to re-check its posts. Only its own subtree
+  # though: nothing outside it can change visibility. A full rebuild would re-embed every
+  # post on the forum, and a category save is a routine admin click.
+  def self.sync_category(category_id)
+    ids = [category_id.to_i] + Category.where(parent_category_id: category_id).pluck(:id)
+    c = client
+    c.delete_where(collection, "category_id:[#{ids.join(",")}]")
+    scope = Post.joins(:topic).where(topics: { category_id: ids })
+    posts_scope(scope).find_in_batches(batch_size: BATCH_SIZE) do |posts|
+      import(collection, posts, c)
+    end
+  end
+
   def self.sync_topic(topic_id)
     c = client
     c.delete_where(collection, "topic_id:=#{topic_id.to_i}")
@@ -263,7 +277,9 @@ module ::Jobs
     def execute(args)
       return if !SiteSetting.typesense_indexer_enabled
 
-      if args[:topic_id]
+      if args[:category_id]
+        ::TypesenseIndexer.sync_category(args[:category_id])
+      elsif args[:topic_id]
         ::TypesenseIndexer.sync_topic(args[:topic_id])
       else
         ::TypesenseIndexer.sync_post(args[:post_id])
@@ -272,7 +288,10 @@ module ::Jobs
   end
 
   class TypesenseRebuild < ::Jobs::Scheduled
-    every 1.day
+    # Only a safety net, for syncs lost while Sidekiq or the plugin was down: every edit,
+    # move and category save already updates Typesense on its own. Daily would re-embed the
+    # whole corpus six more times a week for nothing.
+    every 1.week
     cluster_concurrency 1
 
     def execute(args)

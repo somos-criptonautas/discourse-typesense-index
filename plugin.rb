@@ -42,9 +42,13 @@ after_initialize do
     sync.(topic_id: destination_topic_id)
   end
 
-  # permissions and lockdown live on the category: re-check everything, without a search gap
-  on(:category_updated) { rebuild.() }
+  # permissions and lockdown live on the category, so its posts need re-checking - but only
+  # its own subtree, not the whole forum (see sync_category)
+  on(:category_updated) { |category, *| sync.(category_id: category.id) }
 
-  # enabling the plugin, a new connection, or new indexing rules
+  # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
+  # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category
+  # has to drop the documents already in the index, and a rebuild is the only full pass
+  # there is. These settings change a few times a year; a category save is a weekly click.
   on(:site_setting_changed) { |name, *| rebuild.() if name.to_s.start_with?("typesense_") }
 end
