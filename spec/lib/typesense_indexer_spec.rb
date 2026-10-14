@@ -97,7 +97,7 @@ RSpec.describe Jobs::TypesenseRebuild do
 end
 
 # A category save used to rebuild the whole index, which re-embeds every post on the forum.
-RSpec.describe "TypesenseIndexer.sync_category" do
+RSpec.describe TypesenseIndexer, ".sync_category" do
   before { SiteSetting.typesense_indexer_enabled = true }
 
   let(:client) { instance_double(TypesenseIndexer::Client, delete_where: nil, import: nil) }
