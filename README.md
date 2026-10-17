@@ -60,7 +60,8 @@ To show only topics, filter `post_number:=1` instead. To search one language, fi
 ## How it stays in sync
 
 - **Live:** post and topic events enqueue a `typesense_sync` job for that post or topic.
-- **Rebuild:** daily, and whenever a category or a setting changes. It builds a fresh
+  Saving a category re-syncs only that category and its subcategories.
+- **Rebuild:** weekly as a safety net, and whenever a `typesense_*` setting changes. It builds a fresh
   `<collection>_<timestamp>`, swaps the alias to it, then drops leftover collections from
   earlier or interrupted rebuilds. Searches never see a half-built index.
 

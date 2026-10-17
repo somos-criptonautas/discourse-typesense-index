@@ -60,7 +60,8 @@ filtra por `locale:=en` (el idioma del post según lo detectó Discourse, si no 
 ## Cómo se mantiene sincronizado
 
 - **En vivo:** los eventos de posts y temas encolan un trabajo `typesense_sync` para ese post o tema.
-- **Reconstrucción:** a diario, y cada vez que cambia una categoría o un ajuste. Construye una
+  Guardar una categoría vuelve a sincronizar solo esa categoría y sus subcategorías.
+- **Reconstrucción:** semanal, como red de seguridad, y cada vez que cambia un ajuste `typesense_*`. Construye una
   `<colección>_<marca de tiempo>` nueva, cambia el alias a ella y luego elimina las colecciones sobrantes de
   reconstrucciones anteriores o interrumpidas. Las búsquedas nunca ven un índice a medio construir.
 
