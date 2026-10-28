@@ -55,7 +55,17 @@ gives each discussion's best-matching reply, with a link straight to it:
 ```
 
 To show only topics, filter `post_number:=1` instead. To search one language, filter
-`locale:=en` (the post's language as Discourse detected it, else the site's).
+`locale:=en` (the document's language: the post's, as Discourse detected it, else the site's, or
+the language of a translation).
+
+### Translations
+
+While `content_localization_enabled` is on, each translation of a post (Discourse's own content
+localization) is indexed as an extra document with id `<post id>-<locale>`, the same `url`,
+`topic_id` and `post_number` as the original, the translated text, the translated topic title when
+there is one, and `locale` set to the translation's language. A site that filters by `locale`
+therefore searches the language it shows. A translation into the post's own language adds nothing.
+Grouping by `topic_id`, as above, keeps one row per discussion.
 
 ## How it stays in sync
 
