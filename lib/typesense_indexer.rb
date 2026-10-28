@@ -14,7 +14,8 @@ module ::TypesenseIndexer
     { name: "category_id", type: "int64", facet: true },
     { name: "category", type: "string", facet: true },
     { name: "tags", type: "string[]", facet: true },
-    # The post's language as Discourse detected it ("es", "en"), so each site searches its own.
+    # The language of the document's text: the post's own as Discourse detected it, or a
+    # translation's. Each site searches its own.
     { name: "locale", type: "string", facet: true },
     { name: "like_count", type: "int32" },
     # Denormalised, so a reply only refreshes its own doc and sibling docs keep
@@ -156,7 +157,36 @@ module ::TypesenseIndexer
 
   # Undetected posts (too short to tell) take the site's language; "pt_BR" is filed as "pt".
   def self.locale(post)
-    (post.locale.presence || SiteSetting.default_locale).to_s.split(/[-_]/).first
+    primary_locale(post.locale)
+  end
+
+  def self.primary_locale(value)
+    (value.presence || SiteSetting.default_locale).to_s.split(/[-_]/).first
+  end
+
+  def self.localized_id(post_id, locale)
+    "#{post_id}-#{locale}"
+  end
+
+  # Discourse's own translations (content localization) become extra documents, so each site
+  # searches the language it shows. A translation into the post's own language adds nothing.
+  def self.localized_documents(post, hidden_tags = DiscourseTagging.hidden_tag_names)
+    return [] if !SiteSetting.content_localization_enabled
+
+    titles = post.topic.localizations.index_by(&:locale)
+    post.localizations.filter_map do |localization|
+      next if primary_locale(localization.locale) == locale(post)
+      localized_document(post, localization, titles[localization.locale], hidden_tags)
+    end
+  end
+
+  def self.localized_document(post, localization, topic_localization, hidden_tags)
+    document(post, hidden_tags).merge(
+      id: localized_id(post.id, localization.locale),
+      title: topic_localization&.title.presence || post.topic.title,
+      text: SearchIndexer::HtmlScrubber.scrub(localization.cooked),
+      locale: primary_locale(localization.locale),
+    )
   end
 
   # "/uploads/..." or "//cdn/..." from core, and the search UI lives on another host. A URL
@@ -170,17 +200,34 @@ module ::TypesenseIndexer
   def self.import(target, posts, c = client)
     guardian = Guardian.new
     hidden_tags = DiscourseTagging.hidden_tag_names
-    docs = posts.select { |p| indexable?(p, guardian) }.map { |p| document(p, hidden_tags) }
+    docs =
+      posts
+        .select { |p| indexable?(p, guardian) }
+        .flat_map { |p| [document(p, hidden_tags)] + localized_documents(p, hidden_tags) }
     c.import(target, docs)
   end
 
   def self.sync_post(post_id)
     post = posts_scope(Post).find_by(id: post_id)
     if post && indexable?(post)
-      client.import(collection, [document(post)])
+      client.import(collection, [document(post)] + localized_documents(post))
     else
-      client.delete(collection, post_id)
+      c = client
+      c.delete(collection, post_id)
+      # the post's translations go with it
+      PostLocalization
+        .where(post_id: post_id)
+        .pluck(:locale)
+        .each { |locale| c.delete(collection, localized_id(post_id, locale)) }
     end
+  end
+
+  # One translation was saved or removed: refresh only its document.
+  def self.sync_localization(post_id, locale)
+    post = posts_scope(Post).find_by(id: post_id)
+    id = localized_id(post_id, locale)
+    doc = post && indexable?(post) && localized_documents(post).find { |d| d[:id] == id }
+    doc ? client.import(collection, [doc]) : client.delete(collection, id)
   end
 
   # Delete-then-import leaves the topic out of results for a moment; fine for search.
@@ -268,11 +315,13 @@ module ::TypesenseIndexer
   def self.posts_scope(scope)
     scope.includes(
       :user,
+      :localizations,
       topic: [
         { category: :uploaded_logo },
         :tags,
         :image_upload,
         { topic_thumbnails: :optimized_image },
+        :localizations,
       ],
     )
   end
@@ -289,6 +338,8 @@ module ::Jobs
         ::TypesenseIndexer.sync_category(args[:category_id])
       elsif args[:tag_group_id]
         ::TypesenseIndexer.sync_tag_group(args[:tag_group_id])
+      elsif args[:locale]
+        ::TypesenseIndexer.sync_localization(args[:post_id], args[:locale])
       elsif args[:topic_id]
         ::TypesenseIndexer.sync_topic(args[:topic_id])
       else
