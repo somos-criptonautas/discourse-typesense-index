@@ -56,13 +56,34 @@ after_initialize do
   # Restricting a tag group hides its tag names from anonymous visitors, with no event.
   add_model_callback(:tag_group, :after_commit) { sync.(tag_group_id: id) }
 
+  # Translations (content localization) have no event on every Discourse version, and none at
+  # all for removals and topic titles, so model callbacks queue the sync. reloadable_patch
+  # re-applies them when Discourse reloads its models in development.
+  reloadable_patch do
+    PostLocalization.class_eval do
+      after_commit do
+        if SiteSetting.typesense_indexer_enabled
+          Jobs.enqueue(:typesense_sync, post_id: post_id, locale: locale)
+        end
+      end
+    end
+
+    # a translated title changes every translated document of the topic
+    TopicLocalization.class_eval do
+      after_commit do
+        Jobs.enqueue(:typesense_sync, topic_id: topic_id) if SiteSetting.typesense_indexer_enabled
+      end
+    end
+  end
+
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
   # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category
   # has to drop the documents already in the index, and a rebuild is the only full pass
   # there is. These settings change a few times a year; a category save is a weekly click.
-  # login_required and lockdown decide what an anonymous visitor may read on every category.
-  visibility_settings = %w[login_required category_lockdown_enabled]
+  # login_required and lockdown decide what an anonymous visitor may read on every category;
+  # content localization adds or removes every translated document.
+  rebuild_settings = %w[login_required category_lockdown_enabled content_localization_enabled]
   on(:site_setting_changed) do |name, *|
-    rebuild.() if name.to_s.start_with?("typesense_") || visibility_settings.include?(name.to_s)
+    rebuild.() if name.to_s.start_with?("typesense_") || rebuild_settings.include?(name.to_s)
   end
 end
