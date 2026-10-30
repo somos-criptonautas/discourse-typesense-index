@@ -48,8 +48,9 @@ after_initialize do
 
   # Hiding a flagged reply fires no event, and neither does unhiding it. Hiding a first post
   # unlists the topic, which topic_status_updated already covers.
-  add_model_callback(:post, :after_commit, on: :update) do
-    sync.(post_id: id) if saved_change_to_hidden?
+  # Checked on save: unhide! saves twice, so saved changes are gone by commit.
+  add_model_callback(:post, :after_save) do
+    DB.after_commit { sync.(post_id: id) } if saved_change_to_hidden?
   end
 
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
