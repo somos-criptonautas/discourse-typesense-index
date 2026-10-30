@@ -129,3 +129,23 @@ RSpec.describe TypesenseIndexer, ".sync_category" do
     end
   end
 end
+
+# Changes that take content away from anonymous visitors without any event the index listens to.
+RSpec.describe "TypesenseIndexer visibility triggers" do
+  before { SiteSetting.typesense_indexer_enabled = true }
+
+  fab!(:topic)
+  fab!(:first_post) { Fabricate(:post, topic: topic) }
+  fab!(:reply) { Fabricate(:post, topic: topic) }
+
+  it "re-syncs a reply when it is hidden or unhidden" do
+    expect_enqueued_with(job: :typesense_sync, args: { post_id: reply.id }) do
+      reply.hide!(PostActionType.types[:spam])
+    end
+    expect_enqueued_with(job: :typesense_sync, args: { post_id: reply.id }) { reply.unhide! }
+  end
+
+  it "rebuilds when the site starts requiring login" do
+    expect_enqueued_with(job: :typesense_rebuild) { SiteSetting.login_required = true }
+  end
+end
