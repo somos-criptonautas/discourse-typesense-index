@@ -55,7 +55,17 @@ da la respuesta que mejor coincide de cada discusión, con un enlace directo a e
 ```
 
 Para mostrar solo temas, filtra por `post_number:=1`. Para buscar en un solo idioma,
-filtra por `locale:=en` (el idioma del post según lo detectó Discourse, si no el del sitio).
+filtra por `locale:=en` (el idioma del documento: el del post según lo detectó Discourse, si no el
+del sitio, o el idioma de una traducción).
+
+### Traducciones
+
+Mientras `content_localization_enabled` esté activo, cada traducción de un post (la localización de
+contenido de Discourse) se indexa como un documento extra con id `<id del post>-<idioma>`, la misma
+`url`, `topic_id` y `post_number` que el original, el texto traducido, el título del tema traducido
+si lo hay, y `locale` con el idioma de la traducción. Así un sitio que filtra por `locale` busca en
+el idioma que muestra. Una traducción al idioma del propio post no agrega nada. Agrupar por
+`topic_id`, como arriba, deja una fila por conversación.
 
 ## Cómo se mantiene sincronizado
 

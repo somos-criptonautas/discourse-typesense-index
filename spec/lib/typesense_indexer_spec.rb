@@ -165,3 +165,165 @@ RSpec.describe Post do
     expect_enqueued_with(job: :typesense_rebuild) { SiteSetting.login_required = true }
   end
 end
+
+# Discourse's own translations are indexed as extra documents, so each site searches the
+# language it shows.
+RSpec.describe TypesenseIndexer, ".localized_documents" do
+  before do
+    SiteSetting.typesense_indexer_enabled = true
+    SiteSetting.content_localization_enabled = true
+    SiteSetting.default_locale = "es"
+  end
+
+  let(:post) { Fabricate(:post) }
+  let(:client) { instance_double(TypesenseIndexer::Client, import: nil, delete: nil) }
+
+  def translate(post, locale, cooked: "<p>Hello there</p>")
+    PostLocalization.create!(
+      post: post,
+      locale: locale,
+      raw: "Hello there",
+      cooked: cooked,
+      post_version: post.version,
+      localizer_user_id: Discourse.system_user.id,
+    )
+  end
+
+  def translate_title(topic, locale, title)
+    TopicLocalization.create!(
+      topic: topic,
+      locale: locale,
+      title: title,
+      fancy_title: title,
+      localizer_user_id: Discourse.system_user.id,
+    )
+  end
+
+  it "adds one document per translation, in the translation's language" do
+    translate(post, "en")
+    docs = described_class.localized_documents(post.reload)
+    expect(docs.map { |d| d[:id] }).to eq(["#{post.id}-en"])
+    expect(docs.first).to include(
+      locale: "en",
+      text: a_string_including("Hello there"),
+      topic_id: post.topic_id,
+      url: post.full_url,
+    )
+  end
+
+  it "uses the translated topic title, else the original" do
+    translate(post, "en")
+    expect(described_class.localized_documents(post.reload).first[:title]).to eq(post.topic.title)
+    translate_title(post.topic, "en", "Translated title")
+    expect(described_class.localized_documents(post.reload).first[:title]).to eq("Translated title")
+  end
+
+  it "files a regional translation under its language" do
+    translate(post, "pt_BR")
+    expect(described_class.localized_documents(post.reload).first).to include(
+      id: "#{post.id}-pt_BR",
+      locale: "pt",
+    )
+  end
+
+  it "ignores translations while content localization is off" do
+    translate(post, "en")
+    SiteSetting.content_localization_enabled = false
+    expect(described_class.localized_documents(post.reload)).to eq([])
+  end
+
+  it "skips a translation into the post's own language" do
+    translate(post, "es")
+    expect(described_class.localized_documents(post.reload)).to eq([])
+  end
+
+  it "imports translations with their post" do
+    translate(post, "en")
+    described_class.import("target", [post.reload], client)
+    expect(client).to have_received(:import) do |_collection, docs|
+      expect(docs.map { |d| d[:id] }).to contain_exactly(post.id.to_s, "#{post.id}-en")
+    end
+  end
+end
+
+RSpec.describe TypesenseIndexer, ".sync_localization" do
+  before do
+    SiteSetting.typesense_indexer_enabled = true
+    SiteSetting.content_localization_enabled = true
+    SiteSetting.default_locale = "es"
+  end
+
+  let(:post) { Fabricate(:post) }
+  let(:client) { instance_double(TypesenseIndexer::Client, import: nil, delete: nil) }
+
+  def translate(post, locale, cooked: "<p>Hello there</p>")
+    PostLocalization.create!(
+      post: post,
+      locale: locale,
+      raw: "Hello there",
+      cooked: cooked,
+      post_version: post.version,
+      localizer_user_id: Discourse.system_user.id,
+    )
+  end
+
+  def translate_title(topic, locale, title)
+    TopicLocalization.create!(
+      topic: topic,
+      locale: locale,
+      title: title,
+      fancy_title: title,
+      localizer_user_id: Discourse.system_user.id,
+    )
+  end
+
+  it "syncs a post together with its translations" do
+    allow(described_class).to receive(:client).and_return(client)
+    translate(post, "en")
+    described_class.sync_post(post.id)
+    expect(client).to have_received(:import) do |_collection, docs|
+      expect(docs.map { |d| d[:id] }).to contain_exactly(post.id.to_s, "#{post.id}-en")
+    end
+  end
+
+  it "refreshes one translation, and removes it once it is gone" do
+    allow(described_class).to receive(:client).and_return(client)
+    localization = translate(post, "en")
+    described_class.sync_localization(post.id, "en")
+    expect(client).to have_received(:import) do |_collection, docs|
+      expect(docs.map { |d| d[:id] }).to eq(["#{post.id}-en"])
+    end
+    localization.destroy!
+    described_class.sync_localization(post.id, "en")
+    expect(client).to have_received(:delete).with(described_class.collection, "#{post.id}-en")
+  end
+
+  it "removes a post's translations when the post is no longer public" do
+    allow(described_class).to receive(:client).and_return(client)
+    translate(post, "en")
+    post.topic.update!(visible: false)
+    described_class.sync_post(post.id)
+    expect(client).to have_received(:delete).with(described_class.collection, post.id)
+    expect(client).to have_received(:delete).with(described_class.collection, "#{post.id}-en")
+  end
+
+  it "queues a sync when a translation is saved or removed, and when a title translation changes" do
+    Jobs.run_later!
+    localization = nil
+    expect_enqueued_with(job: :typesense_sync, args: { post_id: post.id, locale: "en" }) do
+      localization = translate(post, "en")
+    end
+    expect_enqueued_with(job: :typesense_sync, args: { post_id: post.id, locale: "en" }) do
+      localization.destroy!
+    end
+    expect_enqueued_with(job: :typesense_sync, args: { topic_id: post.topic_id }) do
+      translate_title(post.topic, "en", "Translated title")
+    end
+  end
+
+  it "routes a translation job to the single-translation sync" do
+    allow(described_class).to receive(:sync_localization)
+    Jobs::TypesenseSync.new.execute(post_id: post.id, locale: "en")
+    expect(described_class).to have_received(:sync_localization).with(post.id, "en")
+  end
+end

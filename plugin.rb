@@ -56,13 +56,21 @@ after_initialize do
   # Restricting a tag group hides its tag names from anonymous visitors, with no event.
   add_model_callback(:tag_group, :after_commit) { sync.(tag_group_id: id) }
 
+  # Translations (content localization) have no event on every Discourse version, and none at
+  # all for removals and topic titles.
+  add_model_callback(PostLocalization, :after_commit) { sync.(post_id: post_id, locale: locale) }
+
+  # a translated title changes every translated document of the topic
+  add_model_callback(TopicLocalization, :after_commit) { sync.(topic_id: topic_id) }
+
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
   # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category
   # has to drop the documents already in the index, and a rebuild is the only full pass
   # there is. These settings change a few times a year; a category save is a weekly click.
-  # login_required and lockdown decide what an anonymous visitor may read on every category.
-  visibility_settings = %w[login_required category_lockdown_enabled]
+  # login_required and lockdown decide what an anonymous visitor may read on every category;
+  # content localization adds or removes every translated document.
+  rebuild_settings = %w[login_required category_lockdown_enabled content_localization_enabled]
   on(:site_setting_changed) do |name, *|
-    rebuild.() if name.to_s.start_with?("typesense_") || visibility_settings.include?(name.to_s)
+    rebuild.() if name.to_s.start_with?("typesense_") || rebuild_settings.include?(name.to_s)
   end
 end
