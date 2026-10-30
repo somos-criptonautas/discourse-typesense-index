@@ -53,6 +53,9 @@ after_initialize do
     DB.after_commit { sync.(post_id: id) } if saved_change_to_hidden?
   end
 
+  # Restricting a tag group hides its tag names from anonymous visitors, with no event.
+  add_model_callback(:tag_group, :after_commit) { sync.(tag_group_id: id) }
+
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
   # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category
   # has to drop the documents already in the index, and a rebuild is the only full pass

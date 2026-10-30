@@ -206,6 +206,14 @@ module ::TypesenseIndexer
     end
   end
 
+  def self.sync_tag_group(tag_group_id)
+    TopicTag
+      .where(tag_id: TagGroupMembership.where(tag_group_id: tag_group_id).select(:tag_id))
+      .distinct
+      .pluck(:topic_id)
+      .each { |id| sync_topic(id) }
+  end
+
   def self.last_rebuild_started_at
     Discourse.redis.get(REBUILD_STARTED_KEY).to_i
   end
@@ -279,6 +287,8 @@ module ::Jobs
 
       if args[:category_id]
         ::TypesenseIndexer.sync_category(args[:category_id])
+      elsif args[:tag_group_id]
+        ::TypesenseIndexer.sync_tag_group(args[:tag_group_id])
       elsif args[:topic_id]
         ::TypesenseIndexer.sync_topic(args[:topic_id])
       else

@@ -145,6 +145,22 @@ RSpec.describe Post do
     expect_enqueued_with(job: :typesense_sync, args: { post_id: reply.id }) { reply.unhide! }
   end
 
+  it "re-syncs the topics of a tag group when it changes" do
+    tag = Fabricate(:tag)
+    topic.tags << tag
+    untagged = Fabricate(:post).topic_id
+    tag_group = Fabricate(:tag_group, tags: [tag])
+    allow(TypesenseIndexer).to receive(:sync_topic)
+
+    expect_enqueued_with(job: :typesense_sync, args: { tag_group_id: tag_group.id }) do
+      tag_group.update!(name: "renamed")
+    end
+    TypesenseIndexer.sync_tag_group(tag_group.id)
+
+    expect(TypesenseIndexer).to have_received(:sync_topic).with(topic.id)
+    expect(TypesenseIndexer).not_to have_received(:sync_topic).with(untagged)
+  end
+
   it "rebuilds when the site starts requiring login" do
     expect_enqueued_with(job: :typesense_rebuild) { SiteSetting.login_required = true }
   end
