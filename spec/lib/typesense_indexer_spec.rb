@@ -131,7 +131,7 @@ RSpec.describe TypesenseIndexer, ".sync_category" do
 end
 
 # Changes that take content away from anonymous visitors without any event the index listens to.
-RSpec.describe "TypesenseIndexer visibility triggers" do
+RSpec.describe TypesenseIndexer, "visibility triggers" do
   before { SiteSetting.typesense_indexer_enabled = true }
 
   fab!(:topic)
