@@ -46,9 +46,23 @@ after_initialize do
   # its own subtree, not the whole forum (see sync_category)
   on(:category_updated) { |category, *| sync.(category_id: category.id) }
 
+  # Hiding a flagged reply fires no event, and neither does unhiding it. Hiding a first post
+  # unlists the topic, which topic_status_updated already covers.
+  # Checked on save: unhide! saves twice, so saved changes are gone by commit.
+  add_model_callback(:post, :after_save) do
+    DB.after_commit { sync.(post_id: id) } if saved_change_to_hidden?
+  end
+
+  # Restricting a tag group hides its tag names from anonymous visitors, with no event.
+  add_model_callback(:tag_group, :after_commit) { sync.(tag_group_id: id) }
+
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
   # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category
   # has to drop the documents already in the index, and a rebuild is the only full pass
   # there is. These settings change a few times a year; a category save is a weekly click.
-  on(:site_setting_changed) { |name, *| rebuild.() if name.to_s.start_with?("typesense_") }
+  # login_required and lockdown decide what an anonymous visitor may read on every category.
+  visibility_settings = %w[login_required category_lockdown_enabled]
+  on(:site_setting_changed) do |name, *|
+    rebuild.() if name.to_s.start_with?("typesense_") || visibility_settings.include?(name.to_s)
+  end
 end
