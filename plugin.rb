@@ -57,24 +57,11 @@ after_initialize do
   add_model_callback(:tag_group, :after_commit) { sync.(tag_group_id: id) }
 
   # Translations (content localization) have no event on every Discourse version, and none at
-  # all for removals and topic titles, so model callbacks queue the sync. reloadable_patch
-  # re-applies them when Discourse reloads its models in development.
-  reloadable_patch do
-    PostLocalization.class_eval do
-      after_commit do
-        if SiteSetting.typesense_indexer_enabled
-          Jobs.enqueue(:typesense_sync, post_id: post_id, locale: locale)
-        end
-      end
-    end
+  # all for removals and topic titles.
+  add_model_callback(PostLocalization, :after_commit) { sync.(post_id: post_id, locale: locale) }
 
-    # a translated title changes every translated document of the topic
-    TopicLocalization.class_eval do
-      after_commit do
-        Jobs.enqueue(:typesense_sync, topic_id: topic_id) if SiteSetting.typesense_indexer_enabled
-      end
-    end
-  end
+  # a translated title changes every translated document of the topic
+  add_model_callback(TopicLocalization, :after_commit) { sync.(topic_id: topic_id) }
 
   # Enabling the plugin, a new connection, a new embedding model, or new indexing rules.
   # Narrowing this is tempting - a rebuild re-embeds everything - but excluding a category

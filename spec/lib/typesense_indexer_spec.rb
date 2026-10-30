@@ -168,7 +168,7 @@ end
 
 # Discourse's own translations are indexed as extra documents, so each site searches the
 # language it shows.
-RSpec.describe TypesenseIndexer, "translations" do
+RSpec.describe TypesenseIndexer, ".localized_documents" do
   before do
     SiteSetting.typesense_indexer_enabled = true
     SiteSetting.content_localization_enabled = true
@@ -246,7 +246,7 @@ RSpec.describe TypesenseIndexer, "translations" do
   end
 end
 
-RSpec.describe TypesenseIndexer, "translation syncing" do
+RSpec.describe TypesenseIndexer, ".sync_localization" do
   before do
     SiteSetting.typesense_indexer_enabled = true
     SiteSetting.content_localization_enabled = true
